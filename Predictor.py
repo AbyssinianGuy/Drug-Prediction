@@ -5,6 +5,7 @@ from matplotlib import pyplot as plt
 from sklearn.decomposition import TruncatedSVD
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import GridSearchCV
+from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
 
 
@@ -69,23 +70,33 @@ class DrugPrediction:
             print("implementing decision tree...")
             # todo implement a decision tree classifier
             predictor = SVC()  # Creating SVM classifier
-            clf = GridSearchCV(predictor, {'kernel':('linear', 'rbf'), 'C':[1, 10]})
+            # best c value ---> [0.01, 1000] acc = 69%
+            # gamma value ---> [10]
+            clf = GridSearchCV(predictor, {'kernel': ('linear', 'rbf'), 'C': [0.001, 1000], 'gamma': [10]})
             clf.fit(self.train_matrix, list(self.references.values()))
             self.predictions = clf.predict(self.test_matrix)
 
         elif classifier == 'lr':
-            pass
             # todo implement a logistic regression classifier
+            predictor = LogisticRegression(C=1000000, class_weight=None, dual=False,
+                                           fit_intercept=True, intercept_scaling=1, max_iter=10000000,
+                                           multi_class='ovr', n_jobs=None, penalty='none', random_state=None,
+                                           solver='saga', tol=0.0001, verbose=0, warm_start=False)
+            predictor.fit(self.train_matrix, list(self.references.values()))
+            print("predictor initialized")
+            self.predictions = predictor.predict(self.test_matrix)
         else:
-            predictor = SVC()
+            # best value for c = 100
+            # best value for gamma = 10
+            predictor = SVC(kernel='rbf', C=10000, gamma=10)
             predictor.fit(self.train_matrix, list(self.references.values()))
             print("predictor initialized...")
             self.predictions = predictor.predict(self.test_matrix)  # y_test
 
-        with open("Solution_decision_tree.txt", "w", encoding='utf8') as file:
+        with open("Solution_SVM.txt", "w", encoding='utf8') as file:
             for score in self.predictions:
                 file.write(score + "\n")
-
+        print("Prediction saved to file.")
         # x, y = self.train_matrix[:][0], self.train_matrix[:][1]
         # x1, y1 = self.test_matrix[:][0], self.test_matrix[:][1]
         # plt.plot(x, y, 'o', color='black', label="training dataset")
@@ -95,4 +106,4 @@ class DrugPrediction:
 
 if __name__ == '__main__':
     predictor_obj = DrugPrediction("train_data.txt", "test_data.txt")
-    predictor_obj.train('dt')
+    predictor_obj.train()
