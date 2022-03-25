@@ -1,3 +1,4 @@
+import random
 import time
 import sys
 import numpy as np
@@ -6,7 +7,8 @@ from sklearn.decomposition import TruncatedSVD
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import GridSearchCV
 from sklearn.linear_model import LogisticRegression
-from sklearn.svm import SVC, LinearSVC
+from sklearn.svm import SVC
+from sklearn.metrics import f1_score
 
 
 def __read_file__(file_name, encoding="utf8"):
@@ -22,7 +24,14 @@ def __read_file__(file_name, encoding="utf8"):
         while reader:
             lines.append(reader.lower())
             reader = file.readline()
-    return lines
+    return np.array(lines)
+
+
+def __split_training_data__(train_dt):
+    # use a 75 to 25 ratio for training and validation sets.
+    np.random.shuffle(train_dt)
+    size = int(len(train_dt) * .75)
+    return train_dt[:size], train_dt[size:]
 
 
 def __parse_data__(data, is_train=True):
@@ -38,74 +47,112 @@ def __parse_data__(data, is_train=True):
             data[i] = data[i].split("\n")[0]
             row = data[i].split("\t")  # split the score from the data
             scores[i] = row[0]
-            # row = row[1].split(" ")
-            # row = [int(i) for i in row]
             features.append(row[1])
     else:  # data is test_data
         for row in data:
             row = row.split("\n")
             features.append(row[0])
-    return features, scores
+    return np.array(features), scores
 
 
 class DrugPrediction:
     def __init__(self, training_file, test_file):
         self.start = time.process_time()
-        self.X_train, self.references = __parse_data__(__read_file__(training_file))
-        self.X_test, self.predictions = __parse_data__(__read_file__(test_file), False)
+        self.training_set = __read_file__(training_file)
+        self.train_data, self.validation_data = __split_training_data__(self.training_set)
+        self.X_train, self.train_ref = __parse_data__(self.train_data)
+        self.X_test, self.valid_ref = __parse_data__(self.validation_data)
+        self.Y_test, self.predictions = __parse_data__(__read_file__(test_file), False)
         self.train_matrix = None
+        self.validation_matrix = None
         self.test_matrix = None
+        self.f1_scores = []
 
-    def train(self, classifier='svm'):
+    def vectorize(self):
         print("Vectorizing the data...")
         tfidf_vector = TfidfVectorizer(norm='l2', use_idf=True, sublinear_tf=True, max_features=5000)
         x_train_vector = tfidf_vector.fit_transform(self.X_train).toarray()
-
         x_test_vector = tfidf_vector.transform(self.X_test).toarray()
+        y_test_vector = tfidf_vector.transform(self.Y_test).toarray()
         print("Calculating SVD....")
         svd = TruncatedSVD(n_components=100)
         self.train_matrix = svd.fit_transform(x_train_vector)  # x_train
-        self.test_matrix = svd.transform(x_test_vector)  # x_test
+        self.validation_matrix = svd.transform(x_test_vector)  # x_test (validation)
+        self.test_matrix = svd.transform(y_test_vector)  # x_test
+
+    def train(self, classifier='svm', file_name="solution"):
+        if self.train_matrix is None:
+            self.vectorize()
+
         if classifier == 'dt':
             print("implementing decision tree...")
             # todo implement a decision tree classifier
-            predictor = SVC()  # Creating SVM classifier
+            predictor = SVC()  # Creating SVM classifier and passing parameters in the GridSearchCV object
             # best c value ---> [0.01, 1000] acc = 69%
             # gamma value ---> [10]
             clf = GridSearchCV(predictor, {'kernel': ('linear', 'rbf'), 'C': [0.001, 1000], 'gamma': [10]})
-            clf.fit(self.train_matrix, list(self.references.values()))
-            self.predictions = clf.predict(self.test_matrix)
+            clf.fit(self.train_matrix, list(self.train_ref.values()))
+            val_prediction = clf.predict(self.validation_matrix)
+            self.f1_scores.append(self.get_f1_score(self.valid_ref, val_prediction))
+            self.f1_scores.append(self.get_f1_score(self.valid_ref, val_prediction, 'macro'))
+            self.f1_scores.append(self.get_f1_score(self.valid_ref, val_prediction, 'weighted'))
+            print("F1-score (micro) = {:.2f}".format(self.f1_scores[0]))
+            print("F1-score (macro) = {:.2f}".format(self.f1_scores[1]))
+            print("F1-score (weighted) = {:.2f}".format(self.f1_scores[2]))
+            self.predictions = clf.predict(self.test_matrix)  # y_test
 
         elif classifier == 'lr':
             # todo implement a logistic regression classifier
+            print("implementing logistic regression classifier...")
             predictor = LogisticRegression(C=1000000, class_weight=None, dual=False,
                                            fit_intercept=True, intercept_scaling=1, max_iter=10000000,
-                                           multi_class='ovr', n_jobs=None, penalty='none', random_state=None,
+                                           multi_class='ovr', n_jobs=None, penalty='l2', random_state=None,
                                            solver='saga', tol=0.0001, verbose=0, warm_start=False)
-            predictor.fit(self.train_matrix, list(self.references.values()))
+            predictor.fit(self.train_matrix, list(self.train_ref.values()))
+            val_prediction = predictor.predict(self.validation_matrix)
+            self.f1_scores.append(self.get_f1_score(self.valid_ref, val_prediction))
+            self.f1_scores.append(self.get_f1_score(self.valid_ref, val_prediction, 'macro'))
+            self.f1_scores.append(self.get_f1_score(self.valid_ref, val_prediction, 'weighted'))
+            print("F1-score (micro) = {:.2f}".format(self.f1_scores[3]))
+            print("F1-score (macro) = {:.2f}".format(self.f1_scores[4]))
+            print("F1-score (weighted) = {:.2f}".format(self.f1_scores[5]))
             print("predictor initialized")
-            self.predictions = predictor.predict(self.test_matrix)
+            self.predictions = predictor.predict(self.test_matrix)  # y_test
         else:
             # best value for c = 100
             # best value for gamma = 10
-
+            print("implementing SVM...")
             predictor = SVC(kernel='rbf', C=1, gamma=1e1, tol=1e-5, probability=True, random_state=0, break_ties=True)
             # predictor = LinearSVC(fit_intercept=True, C=1000, penalty='l1', dual=False, max_iter=100000)
-            predictor.fit(self.train_matrix, list(self.references.values()))
+            predictor.fit(self.train_matrix, list(self.train_ref.values()))
+            val_prediction = predictor.predict(self.validation_matrix)
+            self.f1_scores.append(self.get_f1_score(self.valid_ref, val_prediction))
+            self.f1_scores.append(self.get_f1_score(self.valid_ref, val_prediction, 'macro'))
+            self.f1_scores.append(self.get_f1_score(self.valid_ref, val_prediction, 'weighted'))
+            print("F1-score (micro) = {:.2f}".format(self.f1_scores[6]))
+            print("F1-score (macro) = {:.2f}".format(self.f1_scores[7]))
+            print("F1-score (weighted) = {:.2f}".format(self.f1_scores[8]))
             print("predictor initialized...")
             self.predictions = predictor.predict(self.test_matrix)  # y_test
 
-        with open("Solution_SVM.txt", "w", encoding='utf8') as file:
+        with open(file_name+".txt", "w", encoding='utf8') as file:
             for score in self.predictions:
                 file.write(score + "\n")
         print("Prediction saved to file.")
-        # x, y = self.train_matrix[:][0], self.train_matrix[:][1]
-        # x1, y1 = self.test_matrix[:][0], self.test_matrix[:][1]
-        # plt.plot(x, y, 'o', color='black', label="training dataset")
-        # plt.plot(x1, y1, 'o', color='red', label="testing dataset")
-        # plt.show()
+        print("-"*75)
+        x, y = self.train_matrix[:][0], self.train_matrix[:][1]
+        x1, y1 = self.test_matrix[:][0], self.test_matrix[:][1]
+        plt.plot(x, y, 'o', color='black', label="training dataset")
+        plt.plot(x1, y1, 'o', color='red', label="testing dataset")
+        plt.savefig("vectorized.png")
+
+    @staticmethod
+    def get_f1_score(truth, predict, mode='micro'):
+        return f1_score(list(truth.values()), predict, average=mode)
 
 
 if __name__ == '__main__':
     predictor_obj = DrugPrediction("train_data.txt", "test_data.txt")
-    predictor_obj.train()
+    predictor_obj.train('dt', 'decision_tree_solution')
+    predictor_obj.train('lr', 'logistic_regression_solution')
+    predictor_obj.train(file_name='svm_solution')
