@@ -6,7 +6,7 @@ from sklearn.decomposition import TruncatedSVD
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import GridSearchCV
 from sklearn.linear_model import LogisticRegression
-from sklearn.svm import SVC
+from sklearn.svm import SVC, LinearSVC
 
 
 def __read_file__(file_name, encoding="utf8"):
@@ -88,7 +88,9 @@ class DrugPrediction:
         else:
             # best value for c = 100
             # best value for gamma = 10
-            predictor = SVC(kernel='rbf', C=10000, gamma=10)
+
+            predictor = SVC(kernel='rbf', C=1, gamma=1e1, tol=1e-5, probability=True, random_state=0, break_ties=True)
+            # predictor = LinearSVC(fit_intercept=True, C=1000, penalty='l1', dual=False, max_iter=100000)
             predictor.fit(self.train_matrix, list(self.references.values()))
             print("predictor initialized...")
             self.predictions = predictor.predict(self.test_matrix)  # y_test
