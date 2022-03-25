@@ -1,6 +1,4 @@
-import random
 import time
-import sys
 import numpy as np
 from matplotlib import pyplot as plt
 from sklearn.decomposition import TruncatedSVD
@@ -71,19 +69,28 @@ class DrugPrediction:
     def vectorize(self):
         print("Vectorizing the data...")
         tfidf_vector = TfidfVectorizer(norm='l2', use_idf=True, sublinear_tf=True, max_features=5000)
-        x_train_vector = tfidf_vector.fit_transform(self.X_train).toarray()
-        x_test_vector = tfidf_vector.transform(self.X_test).toarray()
-        y_test_vector = tfidf_vector.transform(self.Y_test).toarray()
+        x_train_vector = tfidf_vector.fit_transform(self.X_train)
+        x_test_vector = tfidf_vector.transform(self.X_test)
+        y_test_vector = tfidf_vector.transform(self.Y_test)
+        print("Training vector shape = {}".format(x_train_vector.shape))
+        print("Validation vector shape = {}".format(x_test_vector.shape))
+        print("Testing vector shape = {}".format(y_test_vector.shape))
+        print("-" * 75)
         print("Calculating SVD....")
         svd = TruncatedSVD(n_components=100)
         self.train_matrix = svd.fit_transform(x_train_vector)  # x_train
         self.validation_matrix = svd.transform(x_test_vector)  # x_test (validation)
         self.test_matrix = svd.transform(y_test_vector)  # x_test
+        print("Training matrix shape = {}".format(self.train_matrix.shape))
+        print("Training matrix shape = {}".format(self.validation_matrix.shape))
+        print("Training matrix shape = {}".format(self.test_matrix.shape))
+        print("Time elapsed to clean-up data = {:.2f}".format(time.process_time() - self.start))
+        print("-" * 75)
 
     def train(self, classifier='svm', file_name="solution"):
         if self.train_matrix is None:
             self.vectorize()
-
+        self.start = time.process_time()  # restart to measure run time for the classifiers
         if classifier == 'dt':
             print("implementing decision tree...")
             # todo implement a decision tree classifier
@@ -100,6 +107,7 @@ class DrugPrediction:
             print("F1-score (macro) = {:.2f}".format(self.f1_scores[1]))
             print("F1-score (weighted) = {:.2f}".format(self.f1_scores[2]))
             self.predictions = clf.predict(self.test_matrix)  # y_test
+            print("Runtime for Decision tree = {:.2f}".format(time.process_time() - self.start))
 
         elif classifier == 'lr':
             # todo implement a logistic regression classifier
@@ -118,6 +126,7 @@ class DrugPrediction:
             print("F1-score (weighted) = {:.2f}".format(self.f1_scores[5]))
             print("predictor initialized")
             self.predictions = predictor.predict(self.test_matrix)  # y_test
+            print("Runtime for Logistic regression = {:.2f}".format(time.process_time() - self.start))
         else:
             # best value for c = 100
             # best value for gamma = 10
@@ -133,6 +142,7 @@ class DrugPrediction:
             print("F1-score (weighted) = {:.2f}".format(self.f1_scores[8]))
             print("predictor initialized...")
             self.predictions = predictor.predict(self.test_matrix)  # y_test
+            print("Runtime for SVM = {:.2f}".format(time.process_time() - self.start))
 
         with open(file_name + ".txt", "w", encoding='utf8') as file:
             for score in self.predictions:
