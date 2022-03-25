@@ -123,7 +123,6 @@ class DrugPrediction:
             # best value for gamma = 10
             print("implementing SVM...")
             predictor = SVC(kernel='rbf', C=1, gamma=1e1, tol=1e-5, probability=True, random_state=0, break_ties=True)
-            # predictor = LinearSVC(fit_intercept=True, C=1000, penalty='l1', dual=False, max_iter=100000)
             predictor.fit(self.train_matrix, list(self.train_ref.values()))
             val_prediction = predictor.predict(self.validation_matrix)
             self.f1_scores.append(self.get_f1_score(self.valid_ref, val_prediction))
@@ -135,20 +134,35 @@ class DrugPrediction:
             print("predictor initialized...")
             self.predictions = predictor.predict(self.test_matrix)  # y_test
 
-        with open(file_name+".txt", "w", encoding='utf8') as file:
+        with open(file_name + ".txt", "w", encoding='utf8') as file:
             for score in self.predictions:
                 file.write(score + "\n")
         print("Prediction saved to file.")
-        print("-"*75)
-        x, y = self.train_matrix[:][0], self.train_matrix[:][1]
-        x1, y1 = self.test_matrix[:][0], self.test_matrix[:][1]
-        plt.plot(x, y, 'o', color='black', label="training dataset")
-        plt.plot(x1, y1, 'o', color='red', label="testing dataset")
-        plt.savefig("vectorized.png")
+        print("-" * 75)
+        '''---- Uncomment the lines below to display the matrices -----'''
+        # x, y = self.train_matrix[:][0], self.train_matrix[:][1]
+        # x1, y1 = self.test_matrix[:][0], self.test_matrix[:][1]
+        # plt.plot(x, y, 'o', color='black', label="training dataset")
+        # plt.plot(x1, y1, 'o', color='red', label="testing dataset")
+        # plt.savefig("vectorized.png")
 
     @staticmethod
     def get_f1_score(truth, predict, mode='micro'):
         return f1_score(list(truth.values()), predict, average=mode)
+
+    @staticmethod
+    def plot_score(filename, y):
+        x = np.array([1, 2, 3])
+        x_ticks = ['Decision Tree', 'Logistic Regression', 'Support Vector Machine']
+        y1 = np.array([y[0], y[3], y[6]])  # decision tree
+        y2 = np.array([y[1], y[4], y[7]])  # logistic reg
+        y3 = np.array([y[2], y[5], y[8]])  # SVM
+        plt.xticks(x, x_ticks)
+        plt.plot(x, y1, label='micro')
+        plt.plot(x, y2, label='macro')
+        plt.plot(x, y3, label='weighted')
+        plt.legend(loc='center right')
+        plt.savefig(filename)
 
 
 if __name__ == '__main__':
@@ -156,3 +170,5 @@ if __name__ == '__main__':
     predictor_obj.train('dt', 'decision_tree_solution')
     predictor_obj.train('lr', 'logistic_regression_solution')
     predictor_obj.train(file_name='svm_solution')
+    # uncomment the line below to see the f1-scores of all the classifier
+    # predictor_obj.plot_score("F1_score.png", predictor_obj.f1_scores)
