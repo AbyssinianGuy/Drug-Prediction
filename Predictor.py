@@ -1,3 +1,7 @@
+'''
+@author Michael A.
+'''
+
 import time
 import numpy as np
 from matplotlib import pyplot as plt
