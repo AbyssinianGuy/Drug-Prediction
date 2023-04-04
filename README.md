@@ -1,5 +1,5 @@
 # Drug-Prediction
-An algorithm that predicts whether the molecular structure of a drug is active or not
+A program that predicts whether the molecular structure of a drug is active or not
 
 This diagram shows how the test data is compared to the train data
 ![image](https://user-images.githubusercontent.com/72876485/229904320-96c39c29-fccb-4ab1-82f0-513a459782f9.png)
